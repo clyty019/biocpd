@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biocpd"
+version = "0.1.0"
+description = "Bio-CPD: A Distributional Divergence-based Framework"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Bio-CPD Team"}
+]
+keywords = [
+    "single-cell",
+    "pseudotime",
+    "trajectory",
+    "changepoint",
+    "tipping-point",
+    "bioinformatics",
+    "scRNA-seq",
+    "cliff-point",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "anndata>=0.10",
+    "matplotlib>=3.7",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "scanpy>=1.9",
+    "scikit-learn>=1.3",
+    "scipy>=1.10",
+]
+
+[project.urls]
+Homepage = "https://github.com/clyty019/biocpd"
+Repository = "https://github.com/clyty019/biocpd"
+Documentation = "https://github.com/clyty019/biocpd#readme"
+
+[tool.setuptools.packages.find]
+where = ["."]
