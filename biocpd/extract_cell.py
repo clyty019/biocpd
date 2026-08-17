@@ -6,11 +6,11 @@ import os
 import pandas as pd
 
 
-def extract_tipping_cells(adata, peak_report, time_col='Pseudotime', total_span=None,
-                          extract_ratio=0.04, save_dir='./'):
+def extract_cliff_cells(adata, peak_report, time_col='Pseudotime', total_span=None,
+                        extract_ratio=0.04, save_dir='./'):
     """
     Extract cells around detected peaks and save as CSV files.
-    
+
     Parameters
     ----------
     adata : AnnData
@@ -43,19 +43,19 @@ def extract_tipping_cells(adata, peak_report, time_col='Pseudotime', total_span=
         t_min = t_peak - window_radius
         t_max = t_peak + window_radius
 
-        tipping_cells = adata.obs[
+        cliff_cells = adata.obs[
             (adata.obs[time_col] >= t_min) &
             (adata.obs[time_col] <= t_max) &
             (~adata.obs.index.isin(used_cells))
         ].index.tolist()
 
-        used_cells.update(tipping_cells)
+        used_cells.update(cliff_cells)
 
-        tipping_name = f"tipping_peak_{i}"
-        df_export = pd.DataFrame(tipping_cells, columns=["Barcode"])
-        df_export['Tipping_Name'] = tipping_name
-        df_export['Tipping_Peak'] = t_peak
+        cliff_name = f"cliff_point_{i}"
+        df_export = pd.DataFrame(cliff_cells, columns=["Barcode"])
+        df_export['Cliff_Name'] = cliff_name
+        df_export['Cliff_Peak'] = t_peak
 
-        save_path = os.path.join(save_dir, f"{tipping_name}_barcodes.csv")
+        save_path = os.path.join(save_dir, f"{cliff_name}_barcodes.csv")
         df_export.to_csv(save_path, index=False)
-        print(f"Peak {i} pseudotime: {t_peak:.3f}, number of extracted cells: {len(tipping_cells)} -> saved to {save_path}")
+        print(f"Peak {i} pseudotime: {t_peak:.3f}, number of extracted cells: {len(cliff_cells)} -> saved to {save_path}")

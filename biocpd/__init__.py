@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 """
-Bio-CPD: Biological Cliff Point Detection in single-cell trajectories
-in single-cell trajectories.
+Bio-CPD: Biological Cliff Point Detection in single-cell trajectories.
 
 Exposed core function: ``bio_cpd_pipeline``
 """
@@ -15,10 +14,11 @@ from sklearn.decomposition import PCA
 
 from .utils import set_seed
 from .data import load_and_validate
-from .analysis import sliding_window_scan, compute_combined_score, find_tipping_peaks
-from .extract_cell import extract_tipping_cells
+from .analysis import sliding_window_scan, compute_combined_score, find_cliff_peaks
+from .extract_cell import extract_cliff_cells
 from .visual import plot_cpi_curve
-from .auroc import evaluate_peaks as _evaluate_peaks
+from .auroc import evaluate_peaks as _evaluate_peaks, compute_auroc_grouped
+from .null import permutation_peak_pvalues
 
 
 def bio_cpd_pipeline(
@@ -94,7 +94,7 @@ def bio_cpd_pipeline(
     Returns
     -------
     peak_report : pd.DataFrame
-        Columns: ``Rank``, ``t``, ``Confidence``.
+        Columns: ``Rank``, ``t``, ``CPI``.
         If ``auroc_n_null > 0``, also includes ``auroc``, ``p_value``,
         ``grade``, and ``overall_auroc``.
         Returns None if no valid cliff points are found.
@@ -137,8 +137,8 @@ def bio_cpd_pipeline(
     df_res, norm_scores, weights = compute_combined_score(df_res)
 
     # 4. Peak detection
-    peak_report = find_tipping_peaks(df_res, prominence=prominence,
-                                     distance=distance)
+    peak_report = find_cliff_peaks(df_res, prominence=prominence,
+                                   distance=distance)
 
     # Print report
     print("\n" + "=" * 45)
@@ -147,7 +147,7 @@ def bio_cpd_pipeline(
     print(f"Adaptive weights: Bhatt={weights[0]:.2f} | Wass={weights[1]:.2f}")
     print("-" * 45)
     if not peak_report.empty:
-        print(peak_report[['Rank', 't', 'Confidence']].to_string(index=False))
+        print(peak_report[['Rank', 't', 'CPI']].to_string(index=False))
     else:
         print("No significant cliff points detected.")
     print("=" * 45)
@@ -171,7 +171,7 @@ def bio_cpd_pipeline(
 
         overall = peak_report['overall_auroc'].iloc[0]
         print(f"  Overall AUROC: {overall:.4f}")
-        cols = ['Rank', 't', 'Confidence', 'auroc', 'p_value', 'grade']
+        cols = ['Rank', 't', 'CPI', 'auroc', 'p_value', 'grade']
         print(peak_report[cols].to_string(index=False))
 
         # Save AUROC results JSON
@@ -181,7 +181,7 @@ def bio_cpd_pipeline(
             auroc_list.append({
                 'rank': int(row['Rank']),
                 'pseudotime': float(row['t']),
-                'confidence': float(row['Confidence']),
+                'cpi': float(row['CPI']),
                 'auroc': float(row['auroc']) if not pd.isna(row['auroc']) else None,
                 'p_value': float(row['p_value']) if not pd.isna(row['p_value']) else None,
                 'grade': row['grade'],
@@ -207,8 +207,8 @@ def bio_cpd_pipeline(
             time_col=time_col, save_path=save_plot,
         )
 
-    # 7. Extract tipping cells
-    extract_tipping_cells(
+    # 7. Extract cliff point cells
+    extract_cliff_cells(
         adata, peak_report,
         time_col=time_col, total_span=total_span,
         extract_ratio=extract_ratio, save_dir=save_dir,

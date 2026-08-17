@@ -1,6 +1,7 @@
 # Bio-CPD Tutorial
 
-This tutorial walks through the complete Bio-CPD workflow.
+This tutorial walks through the complete Bio-CPD workflow: cliff point detection with built-in AUROC validation and permutation-based significance testing.
+
 ---
 
 ## Table of Contents
@@ -8,8 +9,9 @@ This tutorial walks through the complete Bio-CPD workflow.
 1. [Setup and Data Preparation](#1-setup-and-data-preparation)
 2. [Running Bio-CPD](#2-running-bio-cpd)
 3. [Interpreting Built-in AUROC Results](#3-interpreting-built-in-auroc-results)
-4. [Interpreting Results](#6-interpreting-results)
-5. [Complete Example Script](#7-complete-example-script)
+4. [Peak-level Permutation Significance](#4-peak-level-permutation-significance)
+5. [Interpreting Results](#5-interpreting-results)
+6. [Complete Example Script](#6-complete-example-script)
 
 ---
 
@@ -17,27 +19,15 @@ This tutorial walks through the complete Bio-CPD workflow.
 
 ### Installation
 
-```bash
-git clone https://github.com/clyty019/biocpd.git
-cd biocpd
-pip install -e .
-```
+Clone the repository and `import biocpd` directly from the repo directory.
 
 ### Required imports
 
 ```python
-import os, json
 import numpy as np
 import pandas as pd
 import anndata as ad
 import biocpd
-
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold, cross_val_score
-from sklearn.metrics import roc_auc_score
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import MinMaxScaler
-from scipy.signal import find_peaks
 
 import warnings
 warnings.filterwarnings('ignore')
@@ -54,7 +44,7 @@ Your data must consist of:
 2. **Pseudotime metadata**: a CSV file with cell IDs as the index and a `Pseudotime` column
 
 ```python
-adata = ad.read_h5ad("scRNA.h5ad")
+adata = ad.read_h5ad("scRNAepith.h5ad")
 pseudo_df = pd.read_csv("pseudotime_meta.csv", index_col=0)
 pseudotime = pseudo_df["Pseudotime"].values.astype(np.float64)
 
@@ -94,7 +84,7 @@ Bio-CPD Cliff Point Detection Report
 =============================================
 Adaptive weights: Bhatt=0.44 | Wass=0.56
 ---------------------------------------------
- Rank         t  Confidence
+ Rank         t      CPI
     1 17.701793    0.826668
     2  9.620540    0.599050
     3  3.078573    0.200562
@@ -102,7 +92,7 @@ Adaptive weights: Bhatt=0.44 | Wass=0.56
 
 Computing AUROC for each cliff point (delta=10% span, n_null=200)...
   Overall AUROC: 0.8421
- Rank         t  Confidence   auroc     p_value     grade
+ Rank         t      CPI   auroc     p_value     grade
     1 17.701793    0.826668  0.9875  1.01e-02     strong
     2  9.620540    0.599050  0.8033  1.00e+00     strong
     3  3.078573    0.200562  0.7355  5.66e-01   moderate
@@ -119,7 +109,7 @@ The returned `peak_report` DataFrame contains everything you need:
 
 ```python
 print(peak_report.columns)
-# Index(['Rank', 't', 'Confidence', 'auroc', 'p_value', 'grade', 'overall_auroc'])
+# Index(['Rank', 't', 'CPI', 'auroc', 'p_value', 'grade', 'overall_auroc'])
 
 for _, row in peak_report.iterrows():
     print(f"Rank {int(row['Rank'])}: t={row['t']:.4f}, "
@@ -140,7 +130,7 @@ The `BioCPD_results.json` file contains the same information in machine-readable
     {
       "rank": 1,
       "pseudotime": 17.702,
-      "confidence": 0.827,
+      "cpi": 0.827,
       "auroc": 0.9875,
       "p_value": 0.0101,
       "grade": "strong"
@@ -150,9 +140,50 @@ The `BioCPD_results.json` file contains the same information in machine-readable
 }
 ```
 
+## 4. Peak-level Permutation Significance
+
+The built-in AUROC p-value is a *random-position* null: it asks how often a
+classifier at a random trajectory position achieves the same separation. The
+revised manuscript instead assigns significance with a **peak-level permutation
+null** (`biocpd.null.permutation_peak_pvalues`): for each detected peak, the
+*complete* detection pipeline is re-run on shuffled pseudotime, and the peak's
+empirical p-value counts how often a null peak within its local window is at
+least as strong. This is the recommended significance test for publication.
+
+```python
+import numpy as np
+from biocpd.null import permutation_peak_pvalues
+
+X = np.asarray(adata.X.toarray())
+pseudo = adata.obs["Pseudotime"].values.astype(float)
+
+sig = permutation_peak_pvalues(
+    X, pseudo,
+    n_permutations=100,   # B permutations
+    n_procs=8,            # fork pool (X is shared copy-on-write)
+)
+print(sig)
+```
+
+The returned `DataFrame` has one row per detected peak:
+
+| Column | Description |
+|---|---|
+| `rank` | Peak rank (1 = strongest CPI) |
+| `t` | Pseudotime position of the cliff point |
+| `cpi` | Fixed-reference CPI statistic `S_j` used for testing |
+| `abs_bd` | Absolute Bhattacharyya distance at the peak |
+| `p_nominal` | Empirical permutation p-value `(1 + #{T_bj >= S_j}) / (B + 1)` |
+| `p_adj` | Benjamini-Hochberg FDR across the dataset's peaks |
+| `status` | `confirmed` if `p_adj < 0.05`, else `exploratory` |
+
+All detection parameters (prominence, distance, safe margin, step, min cells)
+are shared with the main pipeline and fixed to the manuscript defaults, so the
+peak set is identical to `bio_cpd_pipeline()`.
+
 ---
 
-## 4. Interpreting Results
+## 5. Interpreting Results
 
 ### CP Span Ratio
 
@@ -176,11 +207,11 @@ span_ratio = (max_cp_t - min_cp_t) / total_pseudotime_span
 
 ### p-value Interpretation
 
-The p-value represents the fraction of null-position AUROCs that meet or exceed the observed AUROC. Use it together with AUROC grade and CP Span Ratio.
+The p-value represents the fraction of null-position AUROCs that meet or exceed the observed AUROC. Use it together with AUROC grade and CP Span Ratio — **never rely on p-values alone**.
 
 ---
 
-## 5. Complete Example Script
+## 6. Complete Example Script
 
 A minimal but complete pipeline:
 
@@ -212,10 +243,16 @@ peaks = biocpd.bio_cpd_pipeline(
 # 3. Inspect
 if peaks is not None and not peaks.empty:
     print(f"\nDetected {len(peaks)} cliff points:")
-    print(peaks[["Rank", "t", "Confidence", "auroc", "grade"]].to_string(index=False))
+    print(peaks[["Rank", "t", "CPI", "auroc", "grade"]].to_string(index=False))
     print(f"\nOverall AUROC: {peaks['overall_auroc'].iloc[0]:.4f}")
-    print(f"Barcodes saved to ./results/tipping_peak_*_barcodes.csv")
+    print(f"Barcodes saved to ./results/cliff_point_*_barcodes.csv")
     print(f"Full results saved to ./results/BioCPD_results.json")
 else:
     print("No cliff points detected.")
 ```
+
+---
+
+## References
+
+- Bhattacharyya, A. (1943). On a measure of divergence between two statistical populations. *Bull. Calcutta Math. Soc.*

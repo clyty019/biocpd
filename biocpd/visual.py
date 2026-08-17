@@ -11,7 +11,7 @@ def plot_cpi_curve(df_res, norm_scores, peak_report, metrics=None,
                    save_path=None, fmt=None):
     """
     Plot the Bio-CPD CPI (Cliff Point Index) curve with multiple peak annotations.
-    
+
     Parameters
     ----------
     df_res : pd.DataFrame
@@ -19,7 +19,7 @@ def plot_cpi_curve(df_res, norm_scores, peak_report, metrics=None,
     norm_scores : np.ndarray
         Normalized scores for each metric.
     peak_report : pd.DataFrame
-        DataFrame containing detected peaks with columns `Rank`, `t`, and `Confidence`.
+        DataFrame containing detected peaks with columns `Rank`, `t`, and `CPI`.
     metrics : list
         List of metric names.
     colors : list
@@ -53,7 +53,7 @@ def plot_cpi_curve(df_res, norm_scores, peak_report, metrics=None,
         plt.axvline(x=row['t'], color=color, ls='--', lw=2, alpha=0.7)
         plt.annotate(
             f"Rank {int(row['Rank'])}\nt={row['t']:.2f}",
-            xy=(row['t'], row['Confidence']),
+            xy=(row['t'], row['CPI']),
             xytext=(0, 10), textcoords='offset points',
             ha='center', va='bottom', color=color, fontweight='bold',
             bbox=dict(boxstyle='round,pad=0.2', fc='white', ec=color, alpha=0.8)

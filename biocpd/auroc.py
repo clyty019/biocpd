@@ -5,7 +5,7 @@
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.model_selection import StratifiedKFold, GroupKFold, cross_val_score
 from sklearn.metrics import roc_auc_score
 
 
@@ -94,6 +94,85 @@ def compute_auroc(expr_matrix, pseudotime, cliff_t, delta, n_null=200,
     }
 
 
+def compute_auroc_grouped(expr_matrix, pseudotime, cliff_t, delta, groups,
+                          n_splits=5, random_seed=42):
+    """Grouped (donor/sample-level) AUROC for a single cliff point.
+
+    GroupKFold cross-validation so cells of one donor/sample never appear in
+    both train and test. Folds whose test fold holds a single class are
+    skipped (their count is reported in ``n_valid_folds``). Also computes a
+    leave-this-donor-out per-donor AUC for each donor with >= 10 cells on each
+    side of the cliff.
+
+    Parameters
+    ----------
+    expr_matrix : np.ndarray
+        Expression matrix (n_cells, n_genes).
+    pseudotime : np.ndarray
+        Pseudotime vector.
+    cliff_t : float
+        Candidate cliff point pseudotime.
+    delta : float
+        Half-width of the local neighborhood.
+    groups : np.ndarray
+        Donor/sample label per cell (same order as expr_matrix).
+    n_splits : int
+        Number of GroupKFold splits (capped at the number of distinct groups).
+    random_seed : int
+        Random seed.
+
+    Returns
+    -------
+    dict
+        Keys: t, n_pre, n_post, grouped_auroc, n_valid_folds,
+        per_donor_auc (list), n_donors_ok.
+    """
+    pre_mask = (pseudotime >= cliff_t - delta) & (pseudotime <= cliff_t)
+    post_mask = (pseudotime > cliff_t) & (pseudotime <= cliff_t + delta)
+    n_pre, n_post = int(pre_mask.sum()), int(post_mask.sum())
+    res = dict(t=float(cliff_t), n_pre=n_pre, n_post=n_post,
+               grouped_auroc=np.nan, n_valid_folds=0,
+               per_donor_auc=[], n_donors_ok=0)
+    if n_pre < 10 or n_post < 10:
+        return res
+
+    X = np.vstack([expr_matrix[pre_mask], expr_matrix[post_mask]])
+    y = np.hstack([np.zeros(n_pre), np.ones(n_post)])
+    g = np.concatenate([groups[pre_mask], groups[post_mask]])
+
+    groups_u = np.unique(g)
+    n_groups = len(groups_u)
+    if n_groups < 2:
+        return res
+
+    clf = LogisticRegression(penalty='l2', C=1.0, max_iter=500,
+                             random_state=random_seed, solver='lbfgs')
+    gkf = GroupKFold(n_splits=min(n_splits, n_groups))
+    scores = []
+    for tr, te in gkf.split(X, y, g):
+        # a fold is unusable if its train OR test cells hold a single class
+        if len(np.unique(y[te])) < 2 or len(np.unique(y[tr])) < 2:
+            continue
+        clf.fit(X[tr], y[tr])
+        p = clf.predict_proba(X[te])[:, 1]
+        scores.append(roc_auc_score(y[te], p))
+    res['grouped_auroc'] = float(np.mean(scores)) if scores else np.nan
+    res['n_valid_folds'] = len(scores)
+
+    # leave-this-donor-out per-donor AUC
+    for grp in groups_u:
+        m = g == grp
+        if (m & (y == 0)).sum() < 10 or (m & (y == 1)).sum() < 10:
+            continue
+        if len(np.unique(y[~m])) < 2:
+            continue
+        clf.fit(X[~m], y[~m])
+        p = clf.predict_proba(X[m])[:, 1]
+        res['per_donor_auc'].append(roc_auc_score(y[m], p))
+    res['n_donors_ok'] = len(res['per_donor_auc'])
+    return res
+
+
 def evaluate_peaks(peak_report, expr_matrix, pseudotime, delta,
                    n_null=200, random_seed=42):
     """Compute AUROC for every peak in the report.
@@ -127,7 +206,7 @@ def evaluate_peaks(peak_report, expr_matrix, pseudotime, delta,
         peak_report['auroc'] = np.nan
         peak_report['p_value'] = np.nan
         peak_report['grade'] = 'N/A'
-        peak_report['overall_auroc'] = 'N/A'
+        peak_report['overall_auroc'] = 0.5
         return peak_report
 
     df_auroc = pd.DataFrame(auroc_results)

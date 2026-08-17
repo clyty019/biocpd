@@ -86,19 +86,19 @@ def compute_combined_score(df_res):
     return df_res, norm_scores, weights
 
 
-def find_tipping_peaks(df_res, prominence=0.15, distance=3):
+def find_cliff_peaks(df_res, prominence=0.15, distance=3):
     """Detect peaks on the CPI curve.
 
     Returns
     -------
     pd.DataFrame
-        Columns: ``Rank``, ``t``, ``Confidence``.
+        Columns: ``Rank``, ``t``, ``CPI``.
     """
     peaks, _ = find_peaks(df_res['combined_score'],
                           prominence=prominence, distance=distance)
     peak_report = pd.DataFrame({
         't': df_res.loc[peaks, 't'].values,
-        'Confidence': df_res.loc[peaks, 'combined_score'].values,
-    }).sort_values('Confidence', ascending=False)
+        'CPI': df_res.loc[peaks, 'combined_score'].values,
+    }).sort_values('CPI', ascending=False)
     peak_report['Rank'] = range(1, len(peak_report) + 1)
     return peak_report
