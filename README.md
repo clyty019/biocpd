@@ -1,6 +1,4 @@
-# Bio-CPD
-
-**Biological SwifT-identification of Pseudotime Cliff points in single-cell trajectories**
+# Bio-CPD: A Distributional Divergence-based Framework for Single-cell Trajectory Analysis
 
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -207,8 +205,8 @@ If you use Bio-CPD in your research, please cite:
 
 ```
 @software{biocpd2025,
-  title     = {Bio-CPD: Biological SwifT-identification of Pseudotime Cliff points},
-  author    = {Bio-CPD Team},
+  title     = {Bio-CPD: A Distributional Divergence-based Framework for Single-cell Trajectory Analysis},
+  author    = {Xindi Wei},
   year      = {2025},
   url       = {https://github.com/clyty019/biocpd},
 }

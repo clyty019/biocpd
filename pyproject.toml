@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "biocpd"
 version = "0.3.1"
-description = "Bio-CPD: Biological SwifT-identification of Pseudotime Cliff points in single-cell trajectories"
+description = "Bio-CPD: A Distributional Divergence-based Framework for Single-cell Trajectory Analysis"
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "Bio-CPD Team"}
+    {name = "Xindi Wei"}
 ]
 keywords = [
     "single-cell",
